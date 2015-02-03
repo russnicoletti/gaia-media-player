@@ -29,7 +29,8 @@ var gaiaMediaPlayer = registerComponent('gaia-media-player', {
 
     var dom = {};
     var ids = ['mediaControlsContainer', 'player-header', 'video-title',
-               'options', 'picker-done', 'media-controls'
+               'options', 'picker-done', 'media-controls', 'in-use-overlay',
+               'in-use-overlay-title', 'in-use-overlay-text'
     ];
 
     function toCamelCase(str) {
@@ -141,7 +142,14 @@ var gaiaMediaPlayer = registerComponent('gaia-media-player', {
       </gaia-header>
       <gaia-media-controls id="media-controls"></gaia-media-controls>
     </section>
-  </div>`
+  </div>
+  <!-- display "Cannot load video because it is in use" here -->
+  <form id="in-use-overlay" role="dialog" data-type="confirm" class="hidden">
+    <section id="in-use-overlay-content">
+      <h1 id="in-use-overlay-title"></h1>
+      <p id="in-use-overlay-text"></p>
+    </section>
+  </form>`
 });
 
 module.exports = gaiaMediaPlayer
