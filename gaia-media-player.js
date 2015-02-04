@@ -28,10 +28,8 @@ var gaiaMediaPlayer = registerComponent('gaia-media-player', {
     shadowRoot.innerHTML = this.template;
 
     var dom = {};
-    var ids = ['mediaControlsContainer', 'player-header', 'video-title',
-               'options', 'picker-done', 'media-controls', 'in-use-overlay',
-               'in-use-overlay-title', 'in-use-overlay-text'
-    ];
+    var ids = ['mediaControlsContainer', 'media-controls'
+              ];
 
     function toCamelCase(str) {
       return str.replace(/\-(.)/g, function replacer(str, p1) {
@@ -57,6 +55,8 @@ var gaiaMediaPlayer = registerComponent('gaia-media-player', {
     this.mediaPlayerHelper.initialize(mediaPlayer);
     console.log('mediaPlayerComponent.initialize done');
   },
+
+  allowHidingControls: true,
 
   template: `
 
@@ -103,53 +103,13 @@ var gaiaMediaPlayer = registerComponent('gaia-media-player', {
   #mediaControlsContainer.hidden > * {
     pointer-events: none;
   }
-
-  /**
-   * 1. COMPLEX: Scoped style-sheets within <gaia-header>
-   *    trump all other rules. !important is required
-   *    for an app to over-ride the default appearance
-   *    of content within the custom-element. This may
-   *    change when we get ':host' and ':content' selectors
-   *    in shadow-dom.
-   */
   
-  /* hide options when picking */
-  #mediaControlsContainer.pick-activity #options {
-    display: none !important; /* 1 */
-  }
-
-  /* hide picker 'done' when not picking */
-  #mediaControlsContainer:not(.pick-activity) #picker-done {
-    display: none !important; /* 1 */
-  }
-
-  /* TODO -- test that the following css rules are either not needed or accounted for:
-   *
-   * // hide options when picking
-   * body.pick-activity #options,
-   * body.pick-activity #thumbnails-bottom {
-       display: none !important;
-     }
-   */ 
   </style>
 
   <div id="mediaControlsContainer">
-    <section role="region">
-      <gaia-header id="player-header" action="back">
-        <h1 id="video-title">TODO fix me</h1>
-        <button id="options" data-icon="more"></button>
-        <button id="picker-done" data-l10n-id="done">Done</button>
-      </gaia-header>
-      <gaia-media-controls id="media-controls"></gaia-media-controls>
-    </section>
-  </div>
-  <!-- display "Cannot load video because it is in use" here -->
-  <form id="in-use-overlay" role="dialog" data-type="confirm" class="hidden">
-    <section id="in-use-overlay-content">
-      <h1 id="in-use-overlay-title"></h1>
-      <p id="in-use-overlay-text"></p>
-    </section>
-  </form>`
+    <content select="section,gaia-header"></content>
+    <gaia-media-controls id="media-controls"></gaia-media-controls>
+  </div>`
 });
 
 module.exports = gaiaMediaPlayer
