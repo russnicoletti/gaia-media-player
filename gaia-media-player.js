@@ -2,33 +2,20 @@
  * Dependencies
  */
 
-var MediaPlayerHelper = require('./lib/media_player_helper');
+var Component = require('gaia-component');
+var dom = {};
   
-function registerComponent(name, props) {
-  console.log(Date.now() + '-- registering element ' + name);
-
-  var baseElement = Object.create(HTMLElement.prototype);
-  var elemProto = Object.assign(baseElement, props);
-  
-  var elem = document.registerElement(name, { prototype: elemProto });
-
-  console.log('registered element ' + name);
-
-  return elem;
-}
-
-var gaiaMediaPlayer = registerComponent('gaia-media-player', {
+var MediaPlayer = Component.register('gaia-media-player', {
   /**
    * 'createdCallback' is called when the element is first created.
    */
-  createdCallback: function() {
-    console.log(Date.now() + '-- createdCallback, gaia-media-player web component, begin');
+  created: function() {
+    console.log('************ begin createdCallback, gaia-media-player web component ************');
+    
+    var shadowRoot = this.setupShadowRoot();
 
-    var shadowRoot = this.createShadowRoot();
-    shadowRoot.innerHTML = this.template;
-
-    var dom = {};
-    var ids = ['mediaControlsContainer', 'media-controls'
+    var ids = ['mediaControlsContainer', 'media-controls', 'video-container',
+               'player'
               ];
 
     function toCamelCase(str) {
@@ -37,24 +24,42 @@ var gaiaMediaPlayer = registerComponent('gaia-media-player', {
       });
     }
 
-    ids.forEach(function createElementRef(name) {
-      //var camelName = toCamelCase(name);
+    ids.forEach(function getElementRef(name) {
+      var camelName = toCamelCase(name);
       dom[toCamelCase(name)] = shadowRoot.getElementById(name);
-      //console.log('loaded ' + camelName + ': ' + dom[camelName]);
     });
 
+    console.log('videoContainer.clientWidth: ' + dom.videoContainer.clientWidth);  
+    console.log('videoContainer.clientHeight: ' + dom.videoContainer.clientHeight);
+
     dom.mediaPlayerComponent = this;
-
-    this.mediaPlayerHelper = new MediaPlayerHelper(dom);
-    console.log('mediaPlayerHelper: ' + this.mediaPlayerHelper);
-    console.log(Date.now() + '-- createdCallback, gaia-media-player web component, end');
+    this.mediaPlayerImpl = new MediaPlayerImpl(dom);
+    console.log('************ end createdCallback, gaia-media-player web component ************');
   },
 
-  initialize: function(mediaPlayer) {
-    console.log('mediaPlayerComponent.initialize begin');
-    this.mediaPlayerHelper.initialize(mediaPlayer);
-    console.log('mediaPlayerComponent.initialize done');
+  getVideoContainerDimensions: function() {
+    console.log('************ getVideoContainerDimensions ***********');
+    console.log('videoContainer.clientWidth: ' + dom.videoContainer.clientWidth);  
+    console.log('videoContainer.clientHeight: ' + dom.videoContainer.clientHeight);
+    console.log('mediaControlsContainer.clientWidth: ' + dom.mediaControlsContainer.clientWidth);  
+    console.log('mediaControlsContainer.clientHeight: ' + dom.mediaControlsContainer.clientHeight);
+    console.log('************ getVideoContainerDimensions ***********');
   },
+
+  initialize: function(videoTitle) {
+    console.log('************* begin mediaPlayerComponent initialize **************');
+
+    // video title is owned by the app, is set by the app
+    if (videoTitle) {
+      dom.videoTitle = videoTitle;
+    }
+  },
+
+  load: function(url) { this.mediaPlayerImpl.load(url); },
+
+  play: function() { this.mediaPlayerImpl.play(); },
+
+  pause: function() { this.mediaPlayerImpl.pause(); },
 
   allowHidingControls: true,
 
@@ -104,13 +109,296 @@ var gaiaMediaPlayer = registerComponent('gaia-media-player', {
     pointer-events: none;
   }
   
+  #video-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+  
+  #player {
+    /* size and position are set in JS depending on*/
+    /* video size and screen orientation */
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: 0 0;
+    z-index: 10;
+  }
+
   </style>
 
+  <div id="video-container">
+     <video src="about:blank" id="player"></video>
+  </div>
   <div id="mediaControlsContainer">
-    <content select="section,gaia-header"></content>
+    <content select="section"></content>
     <gaia-media-controls id="media-controls"></gaia-media-controls>
   </div>`
 });
 
-module.exports = gaiaMediaPlayer
+module.exports = MediaPlayer
+
+function MediaPlayerImpl(dom) {
+  console.log('MediaPlayerImpl constructor begin');
+  this.dom = dom;
+  this.controlFadeTimeout = null;
+  this.foo = 'bar'; 
+
+  initializeMediaControls.call(this);
+
+  console.log('MediaPlayerImpl constructor end');
+}
+
+MediaPlayerImpl.prototype = {
+
+  load: function(options) {
+    console.log('loading video ' + options.mediaFile.name);
+
+    for (var key in options) {
+      console.log('options[' + key + ']: ' + options[key]);
+    }
+
+    var url = options.url;
+    var mediaFile = options.mediaFile;
+    var showControls = options.showControls;
+    var keepControls = options.keepControls;
+    var restoreTime = options.restoreTime;
+ 
+    function doneSeeking() {
+      console.log('doneSeeking');
+      this.dom.player.onseeked = null;
+      
+      // show video player after seeking is done
+      this.dom.player.hidden = false;
+  
+      if (showControls) {
+        setControlsVisibility.call(this, true);
+      
+        if (!keepControls) {
+          //scheduleVideoControlsAutoHiding.call(this);
+        }
+      }
+      
+      this.dom.mediaPlayerComponent.dispatchEvent(
+        new CustomEvent('media-loaded'));
+    }
+
+    function handleLoadedMetadata() {
+      console.log('handleLoadedMetadata, mediaFile: ' + mediaFile);
+
+      // We only want the 'loadedmetadata' handler to execute when a video
+      // is explicitly loaded. To prevent unwanted side affects, for
+      // example, when the video app is sent to the background and then to the
+      // foreground, where gecko sends a 'loadedmetadata' event (among others),
+      // we clear the 'loadedmetadata' event handler after the event fires.
+      this.dom.player.onloadedmetadata = null;
+
+      var rotation;
+      if ('metadata' in mediaFile) {
+        if (mediaFile.metadata.currentTime === this.dom.player.duration) {
+          mediaFile.metadata.currentTime = 0;
+        }
+
+        if (this.dom.videoTitle) {
+          this.dom.videoTitle.textContent = mediaFile.metadata.title;
+        }
+
+        // restoreTime takes precedence
+        this.dom.player.currentTime = restoreTime || mediaFile.metadata.currentTime || 0;
+        rotation = mediaFile.metadata.rotation;
+      } else {
+        this.dom.videoTitle.textContent = mediaFile.title || '';
+        this.dom.player.currentTime = restoreTime || 0;
+        rotation = 0;
+      }
+  
+      fitContainer(this.dom.videoContainer, this.dom.player,
+                   rotation || 0);
+
+      if (this.dom.player.seeking) {
+        this.dom.player.onseeked = doneSeeking.bind(this);
+      } else {
+        doneSeeking.call(this);
+      }
+    }
+  
+    //loadingChecker.ensureVideoLoads(handleLoadedMetadata);
+    this.dom.player.onloadedmetadata = handleLoadedMetadata.bind(this);
+    this.dom.player.hidden = true;
+    this.dom.player.preload = 'metadata';
+    this.dom.player.src = url;
+  },
+
+  play: function() {
+    console.log('playing video...');
+    this.dom.player.play();
+  },
+
+  pause: function() {
+    console.log('pausing video...');
+    this.dom.player.pause(); }
+};
+
+function initializeMediaControls() {
+
+  console.log('before mediaControls.initialize, mediaControls: ' + this.dom.mediaControls);
+  this.dom.mediaControls.initialize(this.dom.player);
+  console.log('after mediaControls.initialize');
+
+  this.dom.mediaControlsContainer.addEventListener(
+    'click', toggleVideoControls.bind(this), true);
+
+  // Add listeners for video controls web component
+  //
+  // play, pause
+  this.dom.mediaControls.addEventListener('play-button-click',
+    handlePlayButtonClick);
+
+  // Fullscreen button (tablet only)
+  this.dom.mediaControls.addEventListener('fullscreen-button-click',
+    toggleFullscreenPlayer);
+ 
+  /* 
+  this.dom.playerHeader.addEventListener('action', handleCloseButtonClick);
+  this.dom.pickerDone.addEventListener('click', postPickResult);
+  this.dom.options.addEventListener('click', showOptionsView);
+  */
+  console.log('mediaPlayerImpl initializeMediaControls done!!!!!!!!!!!!!!!!!!');
+}
+
+function fitContainer(container, player, videoRotation) {
+  console.log('fitContainer');
+
+  var containerWidth = container.clientWidth;
+  var containerHeight = container.clientHeight;
+
+  console.log('containerWidth: ' + containerWidth);  
+  console.log('containerHeight: ' + containerHeight);  
+
+  // Don't do anything if we don't know our size.
+  // This could happen if we get a resize event before our metadata loads
+  if (!player.videoWidth || !player.videoHeight)
+    return;
+
+  var width, height; // The size the video will appear, after rotation
+  var rotation = videoRotation || 0;
+
+  switch (rotation) {
+  case 0:
+  case 180:
+    width = player.videoWidth;
+    height = player.videoHeight;
+    break;
+  case 90:
+  case 270:
+    width = player.videoHeight;
+    height = player.videoWidth;
+  }
+
+  var xscale = containerWidth / width;
+  var yscale = containerHeight / height;
+  var scale = Math.min(xscale, yscale);
+
+  // scale large videos down and scale small videos up
+  // this might result in lower image quality for small videos
+  width *= scale;
+  height *= scale;
+
+  var left = ((containerWidth - width) / 2);
+  var top = ((containerHeight - height) / 2);
+
+  /*
+   * The translate and scale only takes a number + length unit. According to
+   * MDN's number definition, the scientific notation, 2.1234e-14, is not a
+   * valid value. To prevent that, we use toFixed(4) to round at the 4th
+   * digits after decimal point.
+   */
+  var transform;
+  switch (rotation) {
+  case 0:
+    transform = 'translate(' + left.toFixed(4) + 'px,' +
+                               top.toFixed(4) + 'px)';
+    break;
+  case 90:
+    transform =
+      'translate(' + (left + width).toFixed(4) + 'px,' +
+                     top.toFixed(4) + 'px) ' +
+      'rotate(90deg)';
+    break;
+  case 180:
+    transform =
+      'translate(' + (left + width).toFixed(4) + 'px,' +
+                     (top + height).toFixed(4) + 'px) ' +
+      'rotate(180deg)';
+    break;
+  case 270:
+    transform =
+      'translate(' + left.toFixed(4) + 'px,' +
+                     (top + height).toFixed(4) + 'px) ' +
+      'rotate(270deg)';
+    break;
+  }
+
+  player.style.transform = transform;
+}
+
+function handlePlayButtonClick() {
+  console.log('play video!!');
+}
+
+function toggleFullscreenPlayer() {
+}
+
+function scheduleVideoControlsAutoHiding() {
+  console.log('scheduleVideoControlsAutoHiding: ' + scheduleVideoControlsAutoHiding);
+
+  this.controlFadeTimeout = setTimeout(function() {
+    console.log('controlFadeTimeout, calling setContronsVisibility');
+    setControlsVisibility.call(this, false);
+  }, 250);
+}
+
+function toggleVideoControls(e) {
+  // When we change the visibility state of video controls, we need to check the
+  // timeout of auto hiding.
+  if (this.controlFadeTimeout) {
+    clearTimeout(this.controlFadeTimeout);
+    this.controlFadeTimeout = null;
+  }
+  // We cannot change the visibility state of video controls when we are in
+  // picking mode.
+  if (!this.dom.mediaPlayerComponent.pendingPick) {
+    if (this.dom.mediaControls.hidden) {
+      // If control not shown, tap any place to show it.
+      setControlsVisibility.call(this, true);
+      e.cancelBubble = true;
+    } else if (e.originalTarget === this.dom.mediaControlsContainer) {
+      // If control is shown, only tap the empty area should show it.
+      setControlsVisibility.call(this, false);
+    }
+  }
+}
+
+function setControlsVisibility(visible) {
+
+  console.log('setControlsVisibility, visible: ' + visible);
+
+  // Respect if app indicates the media controls should not be hidden
+  // (as the video app does when on tablet in landscape mode showing
+  // the list view).
+  if (this.dom.mediaPlayerComponent.allowHidingControls) {
+    this.dom.mediaControlsContainer.classList[visible ? 'remove' : 'add']('hidden');
+
+    // Let the media controls know whether it is visible
+    this.dom.mediaControls.hidden = !visible;
+
+  } else {
+    this.dom.mediaControls.hidden = false;
+  }
+}
+
+module.exports = MediaPlayerImpl;
+
 

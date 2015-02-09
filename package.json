@@ -1,0 +1,29 @@
+{
+  "name": "gaia-media-player",
+  "homepage": "https://github.com/gaia-components/gaia-media-player",
+  "license": "ISC",
+  "main": "script.js",
+  "directories": {
+    "example": "examples",
+    "test": "test"
+  },
+  "devDependencies": {
+    "bower": "^1.3.5",
+    "browserify": "^5.11.2"
+  },
+  "scripts": {
+    "install": "bower install",
+    "build": "mkdir -p dist && browserify gaia-media-player.js --outfile ./dist/gaia-media-player.js --standalone VideoControlBar"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/gaia-components/gaia-media-player.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gaia-components/gaia-media-player/issues"
+  },
+  "browser": {
+    "gaia-component": "./bower_components/gaia-component/gaia-component.js",
+    "gaia-icons": "./bower_components/gaia-icons/gaia-icons.js"
+  }
+}
