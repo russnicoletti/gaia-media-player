@@ -5,12 +5,10 @@
 var Component = require('gaia-component');
 var dom = {};
   
-var MediaPlayer = Component.register('gaia-media-player', {
-  /**
-   * 'createdCallback' is called when the element is first created.
-   */
+var MediaPlayer = Component.register('gaia-video-player', {
+
   created: function() {
-    console.log('************ begin createdCallback, gaia-media-player web component ************');
+    console.log('************ begin created, gaia-video-player web component ************');
     
     var shadowRoot = this.setupShadowRoot();
 
@@ -34,7 +32,7 @@ var MediaPlayer = Component.register('gaia-media-player', {
 
     dom.mediaPlayerComponent = this;
     this.mediaPlayerImpl = new MediaPlayerImpl(dom);
-    console.log('************ end createdCallback, gaia-media-player web component ************');
+    console.log('************ end createdCallback, gaia-video-player web component ************');
   },
 
   getVideoContainerDimensions: function() {
