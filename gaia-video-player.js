@@ -4,12 +4,12 @@
 
 var Component = require('gaia-component');
 var dom = {};
-  
-var MediaPlayer = Component.register('gaia-video-player', {
+
+var VideoPlayer = Component.register('gaia-video-player', {
 
   created: function() {
     console.log('************ begin created, gaia-video-player web component ************');
-    
+
     var shadowRoot = this.setupShadowRoot();
 
     var ids = ['mediaControlsContainer', 'media-controls', 'video-container',
@@ -30,9 +30,8 @@ var MediaPlayer = Component.register('gaia-video-player', {
     console.log('videoContainer.clientWidth: ' + dom.videoContainer.clientWidth);  
     console.log('videoContainer.clientHeight: ' + dom.videoContainer.clientHeight);
 
-    dom.mediaPlayerComponent = this;
-    this.mediaPlayerImpl = new MediaPlayerImpl(dom);
-    console.log('************ end createdCallback, gaia-video-player web component ************');
+    this.videoPlayerImpl = new VideoPlayerImpl(dom, this);
+    console.log('************ end created, gaia-video-player web component ************');
   },
 
   getVideoContainerDimensions: function() {
@@ -45,7 +44,7 @@ var MediaPlayer = Component.register('gaia-video-player', {
   },
 
   initialize: function(videoTitle) {
-    console.log('************* begin mediaPlayerComponent initialize **************');
+    console.log('************* begin videoPlayerComponent initialize **************');
 
     // video title is owned by the app, is set by the app
     if (videoTitle) {
@@ -53,11 +52,11 @@ var MediaPlayer = Component.register('gaia-video-player', {
     }
   },
 
-  load: function(url) { this.mediaPlayerImpl.load(url); },
+  load: function(url) { this.videoPlayerImpl.load(url); },
 
-  play: function() { this.mediaPlayerImpl.play(); },
+  play: function() { this.videoPlayerImpl.play(); },
 
-  pause: function() { this.mediaPlayerImpl.pause(); },
+  pause: function() { this.videoPlayerImpl.pause(); },
 
   allowHidingControls: true,
 
@@ -102,11 +101,11 @@ var MediaPlayer = Component.register('gaia-video-player', {
   #mediaControlsContainer.hidden {
     opacity: 0;
   }
-  
+
   #mediaControlsContainer.hidden > * {
     pointer-events: none;
   }
-  
+
   #video-container {
     position: absolute;
     top: 0;
@@ -114,7 +113,7 @@ var MediaPlayer = Component.register('gaia-video-player', {
     width: 100%;
     height: 100%;
   }
-  
+
   #player {
     /* size and position are set in JS depending on*/
     /* video size and screen orientation */
@@ -136,107 +135,105 @@ var MediaPlayer = Component.register('gaia-video-player', {
   </div>`
 });
 
-module.exports = MediaPlayer
+module.exports = VideoPlayer
 
-function MediaPlayerImpl(dom) {
-  console.log('MediaPlayerImpl constructor begin');
+function VideoPlayerImpl(dom, videoPlayerComponent) {
+  console.log('VideoPlayerImpl constructor begin');
   this.dom = dom;
   this.controlFadeTimeout = null;
-  this.foo = 'bar'; 
+  this.foo = 'bar';
+  this.videoPlayerComponent = videoPlayerComponent; 
 
   initializeMediaControls.call(this);
 
-  console.log('MediaPlayerImpl constructor end');
+  console.log('VideoPlayerImpl constructor end');
 }
 
-MediaPlayerImpl.prototype = {
+VideoPlayerImpl.prototype.load = function(options) {
 
-  load: function(options) {
-    console.log('loading video ' + options.mediaFile.name);
+  for (var key in options) {
+    console.log('options[' + key + ']: ' + options[key]);
+  }
 
-    for (var key in options) {
-      console.log('options[' + key + ']: ' + options[key]);
-    }
+  var url = options.url;
+  var mediaFile = options.mediaFile;
+  var showControls = options.showControls;
+  var keepControls = options.keepControls;
+  var restoreTime = options.restoreTime;
 
-    var url = options.url;
-    var mediaFile = options.mediaFile;
-    var showControls = options.showControls;
-    var keepControls = options.keepControls;
-    var restoreTime = options.restoreTime;
- 
-    function doneSeeking() {
-      console.log('doneSeeking');
-      this.dom.player.onseeked = null;
-      
-      // show video player after seeking is done
-      this.dom.player.hidden = false;
-  
-      if (showControls) {
-        setControlsVisibility.call(this, true);
-      
-        if (!keepControls) {
-          //scheduleVideoControlsAutoHiding.call(this);
-        }
-      }
-      
-      this.dom.mediaPlayerComponent.dispatchEvent(
-        new CustomEvent('media-loaded'));
-    }
+  function doneSeeking() {
+    console.log('doneSeeking');
+    this.dom.player.onseeked = null;
 
-    function handleLoadedMetadata() {
-      console.log('handleLoadedMetadata, mediaFile: ' + mediaFile);
+    // show video player after seeking is done
+    this.dom.player.hidden = false;
 
-      // We only want the 'loadedmetadata' handler to execute when a video
-      // is explicitly loaded. To prevent unwanted side affects, for
-      // example, when the video app is sent to the background and then to the
-      // foreground, where gecko sends a 'loadedmetadata' event (among others),
-      // we clear the 'loadedmetadata' event handler after the event fires.
-      this.dom.player.onloadedmetadata = null;
+    if (showControls) {
+      setControlsVisibility.call(this, true);
 
-      var rotation;
-      if ('metadata' in mediaFile) {
-        if (mediaFile.metadata.currentTime === this.dom.player.duration) {
-          mediaFile.metadata.currentTime = 0;
-        }
-
-        if (this.dom.videoTitle) {
-          this.dom.videoTitle.textContent = mediaFile.metadata.title;
-        }
-
-        // restoreTime takes precedence
-        this.dom.player.currentTime = restoreTime || mediaFile.metadata.currentTime || 0;
-        rotation = mediaFile.metadata.rotation;
-      } else {
-        this.dom.videoTitle.textContent = mediaFile.title || '';
-        this.dom.player.currentTime = restoreTime || 0;
-        rotation = 0;
-      }
-  
-      fitContainer(this.dom.videoContainer, this.dom.player,
-                   rotation || 0);
-
-      if (this.dom.player.seeking) {
-        this.dom.player.onseeked = doneSeeking.bind(this);
-      } else {
-        doneSeeking.call(this);
+      if (!keepControls) {
+        //scheduleVideoControlsAutoHiding.call(this);
       }
     }
-  
-    //loadingChecker.ensureVideoLoads(handleLoadedMetadata);
-    this.dom.player.onloadedmetadata = handleLoadedMetadata.bind(this);
-    this.dom.player.hidden = true;
-    this.dom.player.preload = 'metadata';
-    this.dom.player.src = url;
-  },
 
-  play: function() {
-    console.log('playing video...');
-    this.dom.player.play();
-  },
+    this.videoPlayerComponent.dispatchEvent(
+      new CustomEvent('media-loaded'));
+  }
 
-  pause: function() {
-    console.log('pausing video...');
-    this.dom.player.pause(); }
+  function handleLoadedMetadata() {
+    console.log('handleLoadedMetadata, mediaFile: ' + mediaFile);
+
+    // We only want the 'loadedmetadata' handler to execute when a video
+    // is explicitly loaded. To prevent unwanted side affects, for
+    // example, when the video app is sent to the background and then to the
+    // foreground, where gecko sends a 'loadedmetadata' event (among others),
+    // we clear the 'loadedmetadata' event handler after the event fires.
+    this.dom.player.onloadedmetadata = null;
+
+    var rotation;
+    if ('metadata' in mediaFile) {
+      if (mediaFile.metadata.currentTime === this.dom.player.duration) {
+        mediaFile.metadata.currentTime = 0;
+      }
+
+      if (this.dom.videoTitle) {
+        this.dom.videoTitle.textContent = mediaFile.metadata.title;
+      }
+
+      // restoreTime takes precedence
+      this.dom.player.currentTime = restoreTime || mediaFile.metadata.currentTime || 0;
+      rotation = mediaFile.metadata.rotation;
+    } else {
+      this.dom.videoTitle.textContent = mediaFile.title || '';
+      this.dom.player.currentTime = restoreTime || 0;
+      rotation = 0;
+    }
+
+    fitContainer(this.dom.videoContainer, this.dom.player,
+                 rotation || 0);
+
+    if (this.dom.player.seeking) {
+      this.dom.player.onseeked = doneSeeking.bind(this);
+    } else {
+      doneSeeking.call(this);
+    }
+  }
+
+  //loadingChecker.ensureVideoLoads(handleLoadedMetadata);
+  this.dom.player.onloadedmetadata = handleLoadedMetadata.bind(this);
+  this.dom.player.hidden = true;
+  this.dom.player.preload = 'metadata';
+  this.dom.player.src = url;
+};
+
+VideoPlayerImpl.prototype.play = function() {
+  console.log('playing video...');
+  this.dom.player.play();
+};
+
+VideoPlayerImpl.prototype.pause = function() {
+  console.log('pausing video...');
+  this.dom.player.pause();
 };
 
 function initializeMediaControls() {
@@ -252,18 +249,18 @@ function initializeMediaControls() {
   //
   // play, pause
   this.dom.mediaControls.addEventListener('play-button-click',
-    handlePlayButtonClick);
+    handlePlayButtonClick.bind(this));
 
   // Fullscreen button (tablet only)
   this.dom.mediaControls.addEventListener('fullscreen-button-click',
     toggleFullscreenPlayer);
- 
+
   /* 
   this.dom.playerHeader.addEventListener('action', handleCloseButtonClick);
   this.dom.pickerDone.addEventListener('click', postPickResult);
   this.dom.options.addEventListener('click', showOptionsView);
   */
-  console.log('mediaPlayerImpl initializeMediaControls done!!!!!!!!!!!!!!!!!!');
+  console.log('videoPlayerImpl initializeMediaControls done!!!!!!!!!!!!!!!!!!');
 }
 
 function fitContainer(container, player, videoRotation) {
@@ -344,6 +341,13 @@ function fitContainer(container, player, videoRotation) {
 
 function handlePlayButtonClick() {
   console.log('play video!!');
+  // TODO add code from video.js play/pause function
+  if (this.dom.player.paused) {
+    this.dom.player.play();
+  }
+  else {
+    this.dom.player.pause();
+  }
 }
 
 function toggleFullscreenPlayer() {
@@ -367,7 +371,7 @@ function toggleVideoControls(e) {
   }
   // We cannot change the visibility state of video controls when we are in
   // picking mode.
-  if (!this.dom.mediaPlayerComponent.pendingPick) {
+  if (!this.videoPlayerComponent.pendingPick) {
     if (this.dom.mediaControls.hidden) {
       // If control not shown, tap any place to show it.
       setControlsVisibility.call(this, true);
@@ -386,7 +390,7 @@ function setControlsVisibility(visible) {
   // Respect if app indicates the media controls should not be hidden
   // (as the video app does when on tablet in landscape mode showing
   // the list view).
-  if (this.dom.mediaPlayerComponent.allowHidingControls) {
+  if (this.videoPlayerComponent.allowHidingControls) {
     this.dom.mediaControlsContainer.classList[visible ? 'remove' : 'add']('hidden');
 
     // Let the media controls know whether it is visible
@@ -397,6 +401,6 @@ function setControlsVisibility(visible) {
   }
 }
 
-module.exports = MediaPlayerImpl;
+module.exports = VideoPlayerImpl;
 
 
